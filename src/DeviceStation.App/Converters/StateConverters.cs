@@ -5,20 +5,22 @@ using DeviceStation.Core.Devices;
 
 namespace DeviceStation.App.Converters;
 
-/// <summary>设备状态 → 颜色。Parameter 为 "bg" 时返回浅色背景，否则返回强调色。</summary>
+/// <summary>
+/// 设备状态 → 状态色。ConverterParameter 为 "soft" 时返回 14% 透明度的同色（状态胶囊底色），否则返回实色。
+/// </summary>
 public sealed class DeviceStateBrushConverter : IValueConverter
 {
     public static DeviceStateBrushConverter Instance { get; } = new();
 
-    private static readonly Dictionary<DeviceState, (Color Accent, Color Background)> Palette = new()
+    private static readonly Dictionary<DeviceState, Color> Palette = new()
     {
-        [DeviceState.Idle] = (Color.Parse("#8A94A6"), Color.Parse("#F4F5F7")),
-        [DeviceState.Queued] = (Color.Parse("#6B7A99"), Color.Parse("#EEF1F7")),
-        [DeviceState.Connecting] = (Color.Parse("#D98E04"), Color.Parse("#FFF6E5")),
-        [DeviceState.Running] = (Color.Parse("#2F6FED"), Color.Parse("#EAF1FF")),
-        [DeviceState.Passed] = (Color.Parse("#1E9E5A"), Color.Parse("#E7F6EE")),
-        [DeviceState.Failed] = (Color.Parse("#D64545"), Color.Parse("#FDECEC")),
-        [DeviceState.Cancelled] = (Color.Parse("#B26B00"), Color.Parse("#F7F0E6")),
+        [DeviceState.Idle] = Color.Parse("#475569"),
+        [DeviceState.Queued] = Color.Parse("#64748B"),
+        [DeviceState.Connecting] = Color.Parse("#F59E0B"),
+        [DeviceState.Running] = Color.Parse("#3B82F6"),
+        [DeviceState.Passed] = Color.Parse("#22C55E"),
+        [DeviceState.Failed] = Color.Parse("#EF4444"),
+        [DeviceState.Cancelled] = Color.Parse("#D97706"),
     };
 
     private static readonly Dictionary<(DeviceState, bool), IBrush> Cache = new();
@@ -26,9 +28,9 @@ public sealed class DeviceStateBrushConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not DeviceState state || !Palette.TryGetValue(state, out var c)) return Brushes.Gray;
-        bool bg = parameter as string == "bg";
-        if (!Cache.TryGetValue((state, bg), out var brush))
-            Cache[(state, bg)] = brush = new SolidColorBrush(bg ? c.Background : c.Accent).ToImmutable();
+        bool soft = parameter as string == "soft";
+        if (!Cache.TryGetValue((state, soft), out var brush))
+            Cache[(state, soft)] = brush = new SolidColorBrush(soft ? Color.FromArgb(0x24, c.R, c.G, c.B) : c).ToImmutable();
         return brush;
     }
 

@@ -180,13 +180,15 @@ public sealed class DeviceManager : IAsyncDisposable
         double totalWeight = Math.Max(job.Steps.Sum(s => s.Weight), double.Epsilon);
         double doneWeight = 0;
 
-        foreach (var step in job.Steps)
+        for (int i = 0; i < job.Steps.Count; i++)
         {
+            var step = job.Steps[i];
             ct.ThrowIfCancellationRequested();
             double baseWeight = doneWeight, weight = step.Weight;
-            session.BeginStep(step.Name, step.IsConnect ? DeviceState.Connecting : DeviceState.Running, baseWeight / totalWeight);
+            session.BeginStep(step.Name, i, job.Steps.Count, step.IsConnect ? DeviceState.Connecting : DeviceState.Running,
+                baseWeight / totalWeight);
             ctx.StepProgressSink = (f, detail) =>
-                session.SetProgress((baseWeight + weight * Math.Clamp(f, 0, 1)) / totalWeight, detail);
+                session.SetProgress((baseWeight + weight * Math.Clamp(f, 0, 1)) / totalWeight, f, detail);
             ctx.StepRecorded = false;
 
             try

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>B · 简洁浅色</title>
+<!--
+  方向 B：简洁浅色（办公室/工程师用）
+  布局：
+  ┌ 顶栏：DeviceStation · 作业名 ─────────────────────── 并发 [6] [全部停止] [全部开始] ┐
+  ├ KPI 行：4 张统计卡（良率卡带进度条）                              │ 右侧事件流     │
+  ├ 设备卡 3 列：状态点+文字 │ 编号名称 │ 进度环(%) │ SN / 步骤 │ 底部操作 │ (320px)       │
+  └──────────────────────────────────────────────────────────────────┴────────────────┘
+  主题：白卡片 + 极浅灰底，色彩只用于状态点、进度环与失败信息；阴影很轻。
+-->
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --line: #e7e9ee; --text: #111827; --muted: #6b7280; --faint: #9ca3af; --soft: #f1f3f6;
+    --run: #2563eb; --conn: #d97706; --queue: #94a3b8; --pass: #16a34a; --fail: #dc2626; --stop: #b45309; --idle: #9ca3af;
+    --accent: #111827;
+    --mono: "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.45 var(--sans); width: 1320px; height: 880px; display: flex; flex-direction: column; overflow: hidden; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  header { height: 60px; display: flex; align-items: center; padding: 0 28px; gap: 12px; background: var(--card); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; font-weight: 700; }
+  header .job { color: var(--muted); padding-left: 12px; border-left: 1px solid var(--line); }
+  header .sp { flex: 1; }
+  .field { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .field .box { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; height: 34px; }
+  .field .box button { border: 0; background: none; width: 28px; height: 32px; color: var(--muted); font-size: 15px; }
+  .field .box span { width: 24px; text-align: center; color: var(--text); font: 600 13px var(--mono); }
+  .btn { height: 34px; padding: 0 16px; border-radius: 8px; font: 600 13px var(--sans); border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .body { flex: 1; display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+  .left { padding: 20px 24px 20px 28px; display: flex; flex-direction: column; gap: 18px; overflow: auto; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .stat b { display: block; font: 600 24px var(--mono); margin-top: 2px; }
+  .stat .bar { height: 4px; background: var(--soft); border-radius: 2px; margin-top: 8px; }
+  .stat .bar i { display: block; height: 100%; width: 90%; background: var(--pass); border-radius: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+  .card.failed { border-color: #fecaca; }
+  .st { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--c); font-weight: 600; }
+  .st i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+  .title { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .title small { color: var(--faint); font: 12px var(--mono); margin-left: 6px; }
+  .ring { grid-row: span 2; width: 54px; height: 54px; position: relative; }
+  .ring svg { transform: rotate(-90deg); }
+  .ring b { position: absolute; inset: 0; display: grid; place-items: center; font: 600 12px var(--mono); }
+  .rows { grid-column: 1 / -1; display: grid; grid-template-columns: 36px 1fr; gap: 3px 0; font-size: 12.5px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .rows dt { color: var(--faint); } .rows dd { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rows .d { color: var(--muted); margin-left: 6px; }
+  .msg { grid-column: 1 / -1; font-size: 12px; color: var(--c); min-height: 17px; }
+  .foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+  .foot .ok { color: var(--pass); } .foot .ng { color: var(--fail); }
+  .foot .act { margin-left: auto; display: flex; gap: 6px; }
+  .foot .act button { height: 26px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); font-size: 12px; }
+  .foot .act button:disabled { color: var(--faint); background: var(--soft); }
+  aside { background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  aside h2 { font-size: 13px; padding: 16px 18px 10px; display: flex; justify-content: space-between; }
+  aside h2 span { color: var(--faint); font-weight: 400; font-size: 12px; }
+  .feed { overflow: auto; padding: 0 18px; }
+  .ev { display: grid; grid-template-columns: 10px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--soft); }
+  .ev i { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--c); }
+  .ev p { font-size: 12.5px; }
+  .ev small { display: block; color: var(--faint); font: 11px var(--mono); margin-bottom: 1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DeviceStation</h1><span class="job" id="job"></span><span class="sp"></span>
+  <div class="field">并发上限<div class="box"><button>−</button><span id="cc"></span><button>+</button></div></div>
+  <button class="btn">全部停止</button><button class="btn primary">全部开始</button>
+</header>
+<div class="body">
+  <div class="left">
+    <div class="stats" id="stats"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <aside><h2>事件 <span>最近 200 条</span></h2><div class="feed" id="feed"></div></aside>
+</div>
+<script src="shared.js"></script>
+<script>
+  const color = { idle: "--idle", queued: "--queue", connecting: "--conn", running: "--run", passed: "--pass", failed: "--fail", stopped: "--stop" };
+  job.textContent = DS.job; cc.textContent = DS.kpi.concurrency;
+  const k = DS.kpi;
+  stats.innerHTML = `
+    <div class="stat"><span>运行中 / 排队</span><b>${k.running} <span style="color:var(--faint);font-size:18px">/ ${k.queued}</span></b></div>
+    <div class="stat"><span>通过</span><b style="color:var(--pass)">${k.passed}</b></div>
+    <div class="stat"><span>失败 · 停止</span><b><span style="color:var(--fail)">${k.failed}</span> <span style="color:var(--faint)">·</span> <span style="color:var(--stop)">${k.stopped}</span></b></div>
+    <div class="stat"><span>良率</span><b>${k.yield}</b><div class="bar"><i></i></div></div>`;
+  grid.innerHTML = DS.devices.map(d => {
+    const busy = ["queued", "connecting", "running"].includes(d.state);
+    const p = DS.progress(d), C = 2 * Math.PI * 23;
+    return `<article class="card ${d.state}" style="--c:var(${color[d.state]})">
+      <div><div class="st"><i></i>${DS.label[d.state]}</div><div class="title">${d.name}<small>${d.id}</small></div></div>
+      <div class="ring"><svg width="54" height="54"><circle cx="27" cy="27" r="23" fill="none" stroke="#eef0f3" stroke-width="5"/>
+        <circle cx="27" cy="27" r="23" fill="none" stroke="var(--c)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${C * p} ${C}"/></svg><b>${Math.round(p * 100)}%</b></div>
+      <dl class="rows"><dt>SN</dt><dd class="num">${d.sn || "—"}</dd><dt>步骤</dt><dd>${DS.stepName(d)}<span class="d">${d.detail}</span></dd></dl>
+      <div class="msg">${d.msg || ""}</div>
+      <div class="foot"><span class="num">${d.time || "—"}</span><span class="ok">✓ ${d.ok}</span><span class="ng">✗ ${d.ng}</span>
+        <span class="act"><button ${busy ? "disabled" : ""}>开始</button><button ${busy ? "" : "disabled"}>停止</button></span></div>
+    </article>`;
+  }).join("");
+  const lc = { INFO: "--queue", WARN: "--conn", ERROR: "--fail" };
+  feed.innerHTML = DS.log.slice().reverse().map(([t, l, d, m]) => `<div class="ev" style="--c:var(${lc[l]})"><i></i><p><small>${t} · ${d}</small>${m}</p></div>`).join("");
+</script>
+</body>
+</html>

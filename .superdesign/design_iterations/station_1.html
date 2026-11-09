@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>A · 控制室（深色）</title>
+<!--
+  方向 A：控制室
+  布局：
+  ┌ 顶栏：Logo │ 作业 ───────── KPI 条 ───────── 并发 [-6+] [▶ 全部开始] [■ 全部停止] ┐
+  ├ 卡片 4×2：左侧状态色条 │ 编号+名称 + 状态胶囊 │ SN │ 步骤 │ 分段步骤轨 │ 用时 · ✓✗ · ▶ ■ ┤
+  └ 底部事件抽屉（可折叠）                                                         ┘
+  主题：深石板底，信息靠状态色和等宽数字表达；运行中胶囊圆点呼吸动画。
+-->
+<style>
+  :root {
+    --bg: #0b0f14; --surface: #121821; --surface-2: #18212c; --border: #223041; --border-2: #2c3b4f;
+    --text: #e6edf3; --muted: #8b98a9; --faint: #5b6879;
+    --run: #3b82f6; --conn: #f59e0b; --queue: #64748b; --pass: #22c55e; --fail: #ef4444; --stop: #d97706; --idle: #475569;
+    --mono: "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); width: 1320px; height: 880px; display: flex; flex-direction: column; overflow: hidden; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  header { display: flex; align-items: center; gap: 28px; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .mark { width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #3b82f6, #22c55e); display: grid; place-items: center; font-weight: 800; font-size: 13px; color: #0b0f14; }
+  .brand b { font-size: 15px; letter-spacing: .2px; }
+  .brand small { display: block; color: var(--muted); font-size: 11.5px; }
+  .kpis { display: flex; gap: 2px; margin: 0 auto; background: var(--border); border-radius: 10px; overflow: hidden; }
+  .kpi { background: var(--surface-2); padding: 7px 18px; min-width: 92px; }
+  .kpi span { color: var(--muted); font-size: 11px; display: block; }
+  .kpi strong { font: 600 20px var(--mono); white-space: nowrap; display: block; }
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .stepper { display: flex; align-items: center; border: 1px solid var(--border-2); border-radius: 8px; overflow: hidden; }
+  .stepper label { color: var(--muted); font-size: 11.5px; padding: 0 10px; }
+  .stepper button { background: var(--surface-2); color: var(--text); border: 0; width: 28px; height: 32px; font-size: 15px; }
+  .stepper output { width: 30px; text-align: center; font: 600 14px var(--mono); }
+  .btn { height: 34px; padding: 0 16px; border-radius: 8px; font: 600 13px var(--sans); border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .btn-go { background: var(--pass); color: #04130a; }
+  .btn-stop { background: transparent; color: #fca5a5; border-color: #7f1d1d; }
+
+  main { flex: 1; padding: 18px 24px; display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: min-content; gap: 14px; overflow: auto; }
+  .card { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px 19px; display: flex; flex-direction: column; gap: 10px; }
+  .card::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--c); }
+  .top { display: flex; align-items: center; gap: 10px; }
+  .no { font: 700 22px var(--mono); color: var(--text); }
+  .nm { color: var(--muted); font-size: 12px; }
+  .pill { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+  .busy .pill i { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .kv { display: grid; grid-template-columns: 38px 1fr; row-gap: 4px; font-size: 12.5px; }
+  .kv dt { color: var(--faint); }
+  .kv dd { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kv .detail { color: var(--muted); margin-left: 6px; }
+  .track { display: flex; gap: 2px; height: 6px; }
+  .seg { background: var(--surface-2); border-radius: 2px; position: relative; overflow: hidden; }
+  .seg.done { background: color-mix(in srgb, var(--c) 70%, transparent); }
+  .seg.cur::after { content: ""; position: absolute; inset: 0; width: var(--f); background: var(--c); }
+  .seg.cur.bad { background: var(--c); }
+  .pct { display: flex; justify-content: space-between; color: var(--faint); font-size: 11px; margin-top: -4px; }
+  .msg { font-size: 12px; color: var(--c); min-height: 17px; }
+  .foot { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding-top: 9px; color: var(--muted); font-size: 11.5px; }
+  .foot .ok { color: var(--pass); } .foot .ng { color: var(--fail); }
+  .icon { margin-left: auto; display: flex; gap: 6px; }
+  .icon button { width: 30px; height: 26px; border-radius: 6px; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); font-size: 11px; }
+  .icon button:disabled { opacity: .3; }
+
+  .drawer { height: 168px; border-top: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  .drawer h3 { font-size: 12px; font-weight: 600; padding: 9px 24px 5px; display: flex; gap: 14px; color: var(--muted); }
+  .drawer h3 b { color: var(--text); }
+  .drawer h3 .chip { background: var(--surface-2); border-radius: 6px; padding: 0 8px; }
+  .rows { overflow: auto; padding: 0 24px 8px; font: 11.5px/1.75 var(--mono); }
+  .rows .t { color: var(--faint); } .rows .WARN { color: var(--conn); } .rows .ERROR { color: var(--fail); } .rows .INFO { color: var(--muted); }
+  .rows .dev { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="mark">DS</div><div><b>DeviceStation</b><small id="job"></small></div></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="actions">
+    <div class="stepper"><label>并发</label><button>−</button><output id="cc"></output><button>+</button></div>
+    <button class="btn btn-go">▶ 全部开始</button>
+    <button class="btn btn-stop">■ 全部停止</button>
+  </div>
+</header>
+<main id="grid"></main>
+<section class="drawer">
+  <h3><b>事件</b><span class="chip">全部</span><span>警告 2</span><span>错误 1</span></h3>
+  <div class="rows" id="log"></div>
+</section>
+<script src="shared.js"></script>
+<script>
+  const color = { idle: "--idle", queued: "--queue", connecting: "--conn", running: "--run", passed: "--pass", failed: "--fail", stopped: "--stop" };
+  job.textContent = DS.job;
+  cc.textContent = DS.kpi.concurrency;
+  const k = DS.kpi;
+  kpis.innerHTML = [["运行 / 排队", `${k.running}<span style="color:var(--faint)"> / ${k.queued}</span>`], ["通过", k.passed, "--pass"], ["失败", k.failed, "--fail"], ["停止", k.stopped, "--stop"], ["良率", k.yield]]
+    .map(([l, v, c]) => `<div class="kpi"><span>${l}</span><strong style="${c ? `color:var(${c})` : ""}">${v}</strong></div>`).join("");
+  grid.innerHTML = DS.devices.map(d => {
+    const busy = ["queued", "connecting", "running"].includes(d.state);
+    const segs = DS.steps.map(([n, w], i) => {
+      let cls = "seg";
+      if (d.state === "passed" || i < d.step) cls += " done";
+      else if (i === d.step) cls += " cur" + (d.state === "failed" ? " bad" : "");
+      return `<div class="${cls}" style="flex:${w};--f:${d.frac * 100}%" title="${n}"></div>`;
+    }).join("");
+    return `<article class="card ${busy ? "busy" : ""}" style="--c:var(${color[d.state]})">
+      <div class="top"><span class="no">${d.id.slice(1)}</span><span class="nm">${d.name}</span><span class="pill"><i></i>${DS.label[d.state]}</span></div>
+      <dl class="kv"><dt>SN</dt><dd class="num">${d.sn || "—"}</dd><dt>步骤</dt><dd>${DS.stepName(d)}<span class="detail">${d.detail}</span></dd></dl>
+      <div class="track">${segs}</div>
+      <div class="pct"><span>${d.step >= 0 && d.state !== "passed" ? `步骤 ${d.step + 1}/${DS.steps.length}` : ""}</span><span class="num">${Math.round(DS.progress(d) * 100)}%</span></div>
+      <div class="msg">${d.msg || ""}</div>
+      <div class="foot"><span class="num">${d.time || "—"}</span><span class="ok num">✓ ${d.ok}</span><span class="ng num">✗ ${d.ng}</span>
+        <span class="icon"><button ${busy ? "disabled" : ""}>▶</button><button ${busy ? "" : "disabled"}>■</button></span></div>
+    </article>`;
+  }).join("");
+  log.innerHTML = DS.log.map(([t, l, d, m]) => `<div><span class="t">${t}</span>  <span class="${l}">${l.padEnd(5)}</span>  <span class="dev">${d}</span>  ${m}</div>`).join("");
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>C · 安灯看板</title>
+<!--
+  方向 C：安灯看板（产线大屏，三米外可读）
+  布局：
+  ┌ 细顶栏：DeviceStation │ 作业 │ 良率 90.0% 大字 │ ✓27 ✗3 ■1 │ [全部开始] [全部停止] ┐
+  ├ 4×2 大色块：整块按状态着色；超大工位号、状态字、步骤；底部细进度条            │
+  └ 单行滚动事件条（只显示最新一条警告/错误）                                      ┘
+  主题：近黑底，色块饱和度按状态分级（运行中偏暗，PASS/FAIL 最亮），信息极简。
+-->
+<style>
+  :root {
+    --bg: #07090c; --bar: #0f1318; --line: #1d242d; --text: #f8fafc; --muted: #94a3b8;
+    --run: #1d4ed8; --conn: #b45309; --queue: #334155; --pass: #15803d; --fail: #b91c1c; --stop: #78350f; --idle: #1f2937;
+    --mono: "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.35 var(--sans); width: 1320px; height: 880px; display: flex; flex-direction: column; overflow: hidden; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  header { display: flex; align-items: center; gap: 22px; padding: 12px 20px; background: var(--bar); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; letter-spacing: .3px; }
+  header .job { color: var(--muted); }
+  .yield { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+  .yield span { color: var(--muted); font-size: 12px; }
+  .yield b { font: 700 30px var(--mono); }
+  .counts { display: flex; gap: 14px; font: 600 16px var(--mono); }
+  .btn { height: 38px; padding: 0 18px; border-radius: 8px; border: 0; font: 700 14px var(--sans); }
+  .go { background: #16a34a; color: #fff; } .halt { background: #27303b; color: #fecaca; }
+  main { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 10px; padding: 12px; }
+  .tile { background: var(--c); border-radius: 14px; padding: 16px 18px 14px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .tile.queued, .tile.idle { background: #11161d; border: 1px dashed #334155; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; }
+  .big { font: 800 64px/1 var(--mono); letter-spacing: -2px; opacity: .95; }
+  .state { font: 800 26px var(--sans); text-align: right; }
+  .state small { display: block; font: 500 12px var(--sans); opacity: .75; margin-top: 4px; }
+  .step { margin-top: auto; font-size: 18px; font-weight: 600; }
+  .step span { opacity: .7; font-weight: 400; font-size: 14px; margin-left: 6px; }
+  .meta { display: flex; justify-content: space-between; margin-top: 6px; font: 12.5px var(--mono); opacity: .8; }
+  .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: rgba(0,0,0,.35); }
+  .prog i { display: block; height: 100%; background: rgba(255,255,255,.85); }
+  .running .prog i { animation: glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { opacity: .55; } }
+  .ctl { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; opacity: 0; }
+  .tile:hover .ctl { opacity: 1; }
+  .ctl button { border: 0; border-radius: 6px; padding: 4px 10px; background: rgba(0,0,0,.4); color: #fff; font-size: 12px; }
+  footer { display: flex; gap: 14px; align-items: center; padding: 8px 20px; background: var(--bar); border-top: 1px solid var(--line); font: 12.5px var(--mono); color: var(--muted); }
+  footer .err { color: #fca5a5; }
+  footer .more { margin-left: auto; color: var(--muted); font-family: var(--sans); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DeviceStation</h1><span class="job" id="job"></span>
+  <div class="yield"><span>良率</span><b id="yv"></b></div>
+  <div class="counts" id="counts"></div>
+  <button class="btn go">▶ 全部开始</button><button class="btn halt">■ 全部停止</button>
+</header>
+<main id="grid"></main>
+<footer><span class="err" id="last"></span><span class="more">事件记录 (6) ▸</span></footer>
+<script src="shared.js"></script>
+<script>
+  const color = { idle: "--idle", queued: "--queue", connecting: "--conn", running: "--run", passed: "--pass", failed: "--fail", stopped: "--stop" };
+  const k = DS.kpi;
+  job.textContent = DS.job; yv.textContent = k.yield;
+  counts.innerHTML = `<span style="color:#4ade80">✓ ${k.passed}</span><span style="color:#f87171">✗ ${k.failed}</span><span style="color:#fbbf24">■ ${k.stopped}</span>`;
+  grid.innerHTML = DS.devices.map(d => {
+    const p = DS.progress(d);
+    const sub = d.state === "failed" ? d.msg : d.state === "connecting" ? d.detail : d.state === "running" ? `${Math.round(p * 100)}%` : "";
+    return `<section class="tile ${d.state}" style="--c:var(${color[d.state]})">
+      <div class="ctl"><button>开始</button><button>停止</button></div>
+      <div class="row"><div class="big">${d.id.slice(1)}</div><div class="state">${DS.label[d.state]}<small>${sub}</small></div></div>
+      <div class="step">${DS.stepName(d)}<span>${d.state === "running" ? d.detail : ""}</span></div>
+      <div class="meta"><span>${d.sn || "—"}</span><span>${d.time}  ✓${d.ok} ✗${d.ng}</span></div>
+      <div class="prog"><i style="width:${p * 100}%"></i></div>
+    </section>`;
+  }).join("");
+  const e = DS.log.find(x => x[1] === "ERROR");
+  last.textContent = `${e[0]}  ${e[2]}  ${e[3]}`;
+</script>
+</body>
+</html>

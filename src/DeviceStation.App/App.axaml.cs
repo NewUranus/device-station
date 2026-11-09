@@ -59,7 +59,8 @@ public partial class App : Application
             _manager = new DeviceManager(slots, _ => job, DefaultChannelFactory.Instance, _results, _loggerFactory,
                 new DeviceManagerOptions { MaxConcurrency = options.MaxConcurrency });
 
-            _viewModel = new MainViewModel(_manager, uiLog, $"{job.Name} · 固件 {firmware}", options.DataDirectory);
+            _viewModel = new MainViewModel(_manager, uiLog, job.Steps.Select(st => st.Weight).ToList(),
+                job.Name, $"固件 {firmware}", options.DataDirectory);
             desktop.MainWindow = new MainWindow { DataContext = _viewModel };
             if (options.AutoStart)
                 desktop.MainWindow.Opened += (_, _) => _viewModel.StartAllCommand.Execute(null);

@@ -36,6 +36,15 @@ public sealed record DeviceSnapshot(
     DateTimeOffset? EndedAt)
 {
     public TimeSpan? Elapsed => StartedAt is { } s ? (EndedAt ?? DateTimeOffset.Now) - s : null;
+
+    /// <summary>当前（或停下时所在）步骤在作业中的序号；未开始任何步骤时为 -1。</summary>
+    public int StepIndex { get; init; } = -1;
+
+    /// <summary>作业的步骤总数；未开始时为 0。</summary>
+    public int StepCount { get; init; }
+
+    /// <summary>当前步骤内的进度（0~1）。</summary>
+    public double StepFraction { get; init; }
 }
 
 /// <summary>
@@ -53,6 +62,9 @@ public sealed class DeviceSession
     private string? _currentStep;
     private string? _stepDetail;
     private double _progress;
+    private int _stepIndex = -1;
+    private int _stepCount;
+    private double _stepFraction;
     private int _attempt;
     private string? _serialNumber;
     private string? _failedStep;
@@ -114,6 +126,9 @@ public sealed class DeviceSession
             _currentStep = "等待空闲名额";
             _stepDetail = null;
             _progress = 0;
+            _stepIndex = -1;
+            _stepCount = 0;
+            _stepFraction = 0;
             _attempt = 0;
             _serialNumber = null;
             _failedStep = null;
@@ -126,12 +141,15 @@ public sealed class DeviceSession
         return true;
     }
 
-    internal void BeginStep(string name, DeviceState state, double progress) =>
+    internal void BeginStep(string name, int index, int count, DeviceState state, double progress) =>
         Update(() =>
         {
             if (_state == DeviceState.Queued) _startedAt = DateTimeOffset.Now; // 用时从拿到名额开始算，不含排队
             _state = state;
             _currentStep = name;
+            _stepIndex = index;
+            _stepCount = count;
+            _stepFraction = 0;
             _stepDetail = null;
             _attempt = 1;
             _progress = progress;
@@ -143,9 +161,10 @@ public sealed class DeviceSession
         _stepDetail = detail;
     });
 
-    internal void SetProgress(double progress, string? detail) => Update(() =>
+    internal void SetProgress(double progress, double stepFraction, string? detail) => Update(() =>
     {
         _progress = Math.Clamp(progress, 0, 1);
+        _stepFraction = Math.Clamp(stepFraction, 0, 1);
         if (detail is not null) _stepDetail = detail;
     });
 
@@ -159,7 +178,11 @@ public sealed class DeviceSession
         _message = message;
         _stepDetail = null;
         _endedAt = DateTimeOffset.Now;
-        if (state == DeviceState.Passed) _progress = 1;
+        if (state == DeviceState.Passed)
+        {
+            _progress = 1;
+            _stepIndex = _stepCount;
+        }
         _currentStep = state switch
         {
             DeviceState.Passed => "完成",
@@ -181,5 +204,10 @@ public sealed class DeviceSession
 
     private DeviceSnapshot SnapshotLocked() => new(
         Slot.Id, Slot.Name, _state, _runId, _currentStep, _stepDetail, _progress, _attempt,
-        _serialNumber, _failedStep, _message, _startedAt, _endedAt);
+        _serialNumber, _failedStep, _message, _startedAt, _endedAt)
+    {
+        StepIndex = _stepIndex,
+        StepCount = _stepCount,
+        StepFraction = _stepFraction,
+    };
 }

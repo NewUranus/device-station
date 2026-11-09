@@ -6,8 +6,11 @@ using CommunityToolkit.Mvvm.Input;
 using DeviceStation.App.Logging;
 using DeviceStation.Core.Devices;
 using DeviceStation.Core.Execution;
+using Microsoft.Extensions.Logging;
 
 namespace DeviceStation.App.ViewModels;
+
+public enum LogFilter { All, Warning, Error }
 
 /// <summary>
 /// 主界面。UI 更新节流的做法：
@@ -24,18 +27,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<string, DeviceCardViewModel> _cardsById;
     private readonly ConcurrentDictionary<string, DeviceSnapshot> _pending = new();
     private readonly HashSet<Guid> _countedRuns = new();
+    private readonly List<UiLogEntry> _allLogs = new();
     private readonly DispatcherTimer _timer;
 
-    public MainViewModel(DeviceManager manager, UiLogSink logSink, string jobText, string dataDirectory)
+    public MainViewModel(DeviceManager manager, UiLogSink logSink, IReadOnlyList<double> stepWeights, string jobText,
+        string jobDetail, string dataDirectory)
     {
         _manager = manager;
         _logSink = logSink;
         JobText = jobText;
+        JobDetail = jobDetail;
         DataDirectory = dataDirectory;
         _maxConcurrency = manager.MaxConcurrency;
 
         Devices = new ObservableCollection<DeviceCardViewModel>(
-            manager.Sessions.Select(s => new DeviceCardViewModel(manager, s.Snapshot())));
+            manager.Sessions.Select(s => new DeviceCardViewModel(manager, s.Snapshot(), stepWeights)));
         _cardsById = Devices.ToDictionary(d => d.Id);
 
         _manager.SessionChanged += OnSessionChanged;
@@ -46,10 +52,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<DeviceCardViewModel> Devices { get; }
 
+    /// <summary>按当前筛选条件显示的日志。</summary>
     public ObservableCollection<UiLogEntry> Logs { get; } = new();
 
     /// <summary>当前作业的说明，显示在标题下方。</summary>
     public string JobText { get; }
+
+    /// <summary>作业的补充说明（如固件信息），鼠标悬停时显示。</summary>
+    public string JobDetail { get; }
 
     public string DataDirectory { get; }
 
@@ -60,25 +70,47 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _cancelledTotal;
     [ObservableProperty] private string _yieldText = "—";
     [ObservableProperty] private string _statusText = "就绪";
+    [ObservableProperty] private int _warningCount;
+    [ObservableProperty] private int _errorCount;
+    [ObservableProperty] private bool _isLogExpanded = true;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StopAllCommand))]
+    [NotifyPropertyChangedFor(nameof(IsFilterAll), nameof(IsFilterWarning), nameof(IsFilterError))]
+    private LogFilter _logFilter = LogFilter.All;
+
+    public bool IsFilterAll => LogFilter == LogFilter.All;
+    public bool IsFilterWarning => LogFilter == LogFilter.Warning;
+    public bool IsFilterError => LogFilter == LogFilter.Error;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartAllCommand), nameof(StopAllCommand), nameof(IncreaseConcurrencyCommand),
+        nameof(DecreaseConcurrencyCommand))]
     private bool _anyBusy;
 
-    [ObservableProperty] private decimal? _maxConcurrency;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DecreaseConcurrencyCommand))]
+    private int _maxConcurrency;
 
-    partial void OnMaxConcurrencyChanged(decimal? value)
+    private bool CanIncreaseConcurrency() => !AnyBusy && MaxConcurrency < 64;
+    private bool CanDecreaseConcurrency() => !AnyBusy && MaxConcurrency > 1;
+
+    [RelayCommand(CanExecute = nameof(CanIncreaseConcurrency))]
+    private void IncreaseConcurrency() => SetConcurrency(MaxConcurrency + 1);
+
+    [RelayCommand(CanExecute = nameof(CanDecreaseConcurrency))]
+    private void DecreaseConcurrency() => SetConcurrency(MaxConcurrency - 1);
+
+    private void SetConcurrency(int value)
     {
-        if (value is not { } v || v < 1) return;
         try
         {
-            _manager.MaxConcurrency = (int)v;
-            StatusText = $"并发上限已设为 {(int)v}";
+            _manager.MaxConcurrency = value;
+            MaxConcurrency = value;
+            StatusText = $"并发上限已设为 {value}";
         }
         catch (InvalidOperationException ex)
         {
             StatusText = ex.Message;
-            MaxConcurrency = _manager.MaxConcurrency;
         }
     }
 
@@ -108,7 +140,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void ClearLog() => Logs.Clear();
+    private void SetLogFilter(LogFilter filter) => LogFilter = filter;
+
+    [RelayCommand]
+    private void ToggleLog() => IsLogExpanded = !IsLogExpanded;
+
+    [RelayCommand]
+    private void ClearLog()
+    {
+        _allLogs.Clear();
+        Logs.Clear();
+        WarningCount = ErrorCount = 0;
+    }
+
+    partial void OnLogFilterChanged(LogFilter value)
+    {
+        Logs.Clear();
+        foreach (var e in _allLogs.Where(Matches)) Logs.Add(e);
+    }
+
+    private bool Matches(UiLogEntry e) => LogFilter switch
+    {
+        LogFilter.Warning => e.Level == LogLevel.Warning,
+        LogFilter.Error => e.Level >= LogLevel.Error,
+        _ => true,
+    };
 
     // 后台线程：只记最新快照，不碰 UI。
     private void OnSessionChanged(object? sender, DeviceSnapshot snapshot) => _pending[snapshot.Id] = snapshot;
@@ -158,9 +214,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         int n = 0;
         while (n++ < 200 && _logSink.TryDequeue(out var entry))
         {
-            Logs.Add(entry);
-            if (entry.IsError) StatusText = $"[{entry.DeviceId}] {entry.Message}";
+            _allLogs.Add(entry);
+            if (entry.IsWarning) WarningCount++;
+            if (entry.IsError)
+            {
+                ErrorCount++;
+                StatusText = $"[{entry.DeviceId}] {entry.Message}";
+            }
+            if (Matches(entry)) Logs.Add(entry);
         }
+
+        if (_allLogs.Count > MaxLogLines) _allLogs.RemoveRange(0, _allLogs.Count - MaxLogLines);
         while (Logs.Count > MaxLogLines) Logs.RemoveAt(0);
     }
 

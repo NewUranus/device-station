@@ -3,120 +3,273 @@
         xmlns:vm="using:DeviceStation.App.ViewModels"
         xmlns:log="using:DeviceStation.App.Logging"
         xmlns:conv="using:DeviceStation.App.Converters"
+        xmlns:ctl="using:DeviceStation.App.Controls"
         x:Class="DeviceStation.App.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Title="DeviceStation · 多设备并行作业"
-        Width="1320" Height="880" MinWidth="720" MinHeight="560"
-        Background="#F7F8FA">
+        Title="DeviceStation"
+        Width="1320" Height="880" MinWidth="900" MinHeight="600"
+        Background="{StaticResource Bg}">
+
+  <!-- 设计稿：.superdesign/design_iterations/station_1.html（方向 A · 控制室） -->
+  <Window.Resources>
+    <conv:DeviceStateBrushConverter x:Key="StateBrush" />
+  </Window.Resources>
 
   <Window.Styles>
-    <Style Selector="TextBlock.label">
-      <Setter Property="Foreground" Value="#6B7280" />
-      <Setter Property="FontSize" Value="12" />
+    <!-- 文字 -->
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
     </Style>
-    <Style Selector="TextBlock.stat">
-      <Setter Property="FontSize" Value="22" />
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+    <Style Selector="TextBlock.faint">
+      <Setter Property="Foreground" Value="{StaticResource Faint}" />
+    </Style>
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="{StaticResource Mono}" />
+    </Style>
+
+    <!-- 按钮 -->
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Border2}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#223041" />
+      <Setter Property="BorderBrush" Value="#3A4B61" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+      <Setter Property="Foreground" Value="{StaticResource Faint}" />
+    </Style>
+    <Style Selector="Button:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <Style Selector="Button.go">
+      <Setter Property="Background" Value="#22C55E" />
+      <Setter Property="BorderBrush" Value="#22C55E" />
+      <Setter Property="Foreground" Value="#04130A" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="16,0" />
+    </Style>
+    <Style Selector="Button.go:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#4ADE80" />
+      <Setter Property="BorderBrush" Value="#4ADE80" />
+      <Setter Property="Foreground" Value="#04130A" />
+    </Style>
+
+    <Style Selector="Button.halt">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#7F1D1D" />
+      <Setter Property="Foreground" Value="#FCA5A5" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="16,0" />
+    </Style>
+    <Style Selector="Button.halt:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#2A1215" />
+      <Setter Property="BorderBrush" Value="#B91C1C" />
+      <Setter Property="Foreground" Value="#FECACA" />
+    </Style>
+
+    <Style Selector="Button.icon">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.step">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.chip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+    <Style Selector="Button.chip.active">
+      <Setter Property="Background" Value="{StaticResource Surface2}" />
+      <Setter Property="Foreground" Value="{StaticResource Text}" />
+    </Style>
+
+    <!-- 卡片 -->
     <Style Selector="Border.card">
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="BorderThickness" Value="1.5" />
-      <Setter Property="Padding" Value="14,12" />
-      <Setter Property="Margin" Value="0,0,12,12" />
-      <Setter Property="Width" Value="296" />
+      <Setter Property="Background" Value="{StaticResource Surface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Margin" Value="7" />
     </Style>
-    <Style Selector="TextBlock.log">
-      <Setter Property="FontFamily" Value="Menlo, Consolas, monospace" />
-      <Setter Property="FontSize" Value="11.5" />
+
+    <!-- 运行中状态点呼吸 -->
+    <Style Selector="Ellipse.pulse">
+      <Style.Animations>
+        <Animation Duration="0:0:1.4" IterationCount="Infinite">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
     </Style>
-    <Style Selector="TextBlock.log.warn">
-      <Setter Property="Foreground" Value="#B26B00" />
+
+    <!-- 日志 -->
+    <Style Selector="ListBox.log">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="TextBlock.log.error">
-      <Setter Property="Foreground" Value="#D64545" />
+    <Style Selector="ListBox.log ListBoxItem">
+      <Setter Property="Padding" Value="24,0" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="TextBlock.lvl">
+      <Setter Property="Foreground" Value="{StaticResource Muted}" />
+    </Style>
+    <Style Selector="TextBlock.lvl.warn">
+      <Setter Property="Foreground" Value="#F59E0B" />
+    </Style>
+    <Style Selector="TextBlock.lvl.error">
+      <Setter Property="Foreground" Value="#EF4444" />
     </Style>
   </Window.Styles>
 
   <DockPanel>
-    <!-- 顶部：全局操作 + 统计 -->
-    <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="20,14">
+    <!-- 顶栏：品牌 + 作业 │ KPI 条 │ 并发 + 全局操作 -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}"
+            BorderThickness="0,0,0,1" Padding="24,14">
       <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Spacing="2" VerticalAlignment="Center">
-          <TextBlock Text="DeviceStation" FontSize="20" FontWeight="Bold" />
-          <TextBlock Classes="label" Text="{Binding JobText}" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,20,0">
+          <Border Width="28" Height="28" CornerRadius="7">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Offset="0" Color="#3B82F6" />
+                <GradientStop Offset="1" Color="#22C55E" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock Text="DS" FontWeight="ExtraBold" FontSize="12.5" Foreground="#0B0F14"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="DeviceStation" FontSize="15" FontWeight="Bold" />
+            <TextBlock Classes="muted" Text="{Binding JobText}" FontSize="11.5" ToolTip.Tip="{Binding JobDetail}" />
+          </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="28" HorizontalAlignment="Center" VerticalAlignment="Center">
-          <StackPanel>
-            <TextBlock Classes="label" Text="运行中 / 排队" />
-            <TextBlock Classes="stat">
-              <Run Text="{Binding Mode=OneWay, Path=RunningCount}" Foreground="#2F6FED" />
-              <Run Text=" / " Foreground="#9CA3AF" />
-              <Run Text="{Binding Mode=OneWay, Path=QueuedCount}" Foreground="#6B7A99" />
-            </TextBlock>
+        <Border Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="10"
+                Background="{StaticResource Border}" ClipToBounds="True">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Border Background="{StaticResource Surface2}" Padding="14,7" MinWidth="96">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="运行 / 排队" FontSize="11" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Classes="mono" FontSize="20" FontWeight="SemiBold" Text="{Binding RunningCount}" />
+                  <TextBlock Classes="mono faint" FontSize="20" FontWeight="SemiBold" Text="{Binding QueuedCount, StringFormat=' / {0}'}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+            <Border Background="{StaticResource Surface2}" Padding="14,7" MinWidth="76">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="通过" FontSize="11" />
+                <TextBlock Classes="mono" FontSize="20" FontWeight="SemiBold" Foreground="#22C55E" Text="{Binding PassedTotal}" />
+              </StackPanel>
+            </Border>
+            <Border Background="{StaticResource Surface2}" Padding="14,7" MinWidth="76">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="失败" FontSize="11" />
+                <TextBlock Classes="mono" FontSize="20" FontWeight="SemiBold" Foreground="#EF4444" Text="{Binding FailedTotal}" />
+              </StackPanel>
+            </Border>
+            <Border Background="{StaticResource Surface2}" Padding="14,7" MinWidth="76">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="停止" FontSize="11" />
+                <TextBlock Classes="mono" FontSize="20" FontWeight="SemiBold" Foreground="#D97706" Text="{Binding CancelledTotal}" />
+              </StackPanel>
+            </Border>
+            <Border Background="{StaticResource Surface2}" Padding="14,7" MinWidth="96">
+              <StackPanel>
+                <TextBlock Classes="muted" Text="良率" FontSize="11" />
+                <TextBlock Classes="mono" FontSize="20" FontWeight="SemiBold" Text="{Binding YieldText}" />
+              </StackPanel>
+            </Border>
           </StackPanel>
-          <StackPanel>
-            <TextBlock Classes="label" Text="通过" />
-            <TextBlock Classes="stat" Foreground="#1E9E5A" Text="{Binding PassedTotal}" />
-          </StackPanel>
-          <StackPanel>
-            <TextBlock Classes="label" Text="失败" />
-            <TextBlock Classes="stat" Foreground="#D64545" Text="{Binding FailedTotal}" />
-          </StackPanel>
-          <StackPanel>
-            <TextBlock Classes="label" Text="停止" />
-            <TextBlock Classes="stat" Foreground="#B26B00" Text="{Binding CancelledTotal}" />
-          </StackPanel>
-          <StackPanel>
-            <TextBlock Classes="label" Text="良率" />
-            <TextBlock Classes="stat" Text="{Binding YieldText}" />
-          </StackPanel>
-        </StackPanel>
+        </Border>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <TextBlock Classes="label" Text="并发上限" VerticalAlignment="Center" />
-            <NumericUpDown Value="{Binding MaxConcurrency}" Minimum="1" Maximum="64" Increment="1"
-                           FormatString="0" Width="110" IsEnabled="{Binding !AnyBusy}"
-                           ToolTip.Tip="同时连接/运行的设备数，设备空闲时才能修改" />
-          </StackPanel>
-          <Button Content="全部开始" Command="{Binding StartAllCommand}" Classes="accent" Padding="18,8" />
-          <Button Content="全部停止" Command="{Binding StopAllCommand}" Padding="18,8" />
-          <Button Content="清零统计" Command="{Binding ResetStatisticsCommand}" Padding="12,8" />
+          <Border BorderBrush="{StaticResource Border2}" BorderThickness="1" CornerRadius="8" ClipToBounds="True"
+                  ToolTip.Tip="同时连接/运行的设备数，设备空闲时才能修改">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Classes="muted" Text="并发" FontSize="11.5" VerticalAlignment="Center" Margin="10,0" />
+              <Button Classes="step" Content="−" Command="{Binding DecreaseConcurrencyCommand}" />
+              <TextBlock Classes="mono" Text="{Binding MaxConcurrency}" Width="30" TextAlignment="Center"
+                         VerticalAlignment="Center" FontWeight="SemiBold" FontSize="14" />
+              <Button Classes="step" Content="+" Command="{Binding IncreaseConcurrencyCommand}" />
+            </StackPanel>
+          </Border>
+          <Button Classes="go" Content="▶  全部开始" Command="{Binding StartAllCommand}" />
+          <Button Classes="halt" Content="■  全部停止" Command="{Binding StopAllCommand}" />
+          <Button Content="清零" Command="{Binding ResetStatisticsCommand}" Height="34" Padding="12,0"
+                  ToolTip.Tip="清零通过/失败/停止统计" />
         </StackPanel>
       </Grid>
     </Border>
 
-    <!-- 底部：状态栏 -->
-    <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="20,6">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Classes="label" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
-        <TextBlock Grid.Column="1" Classes="label" Text="{Binding DataDirectory, StringFormat='数据目录 {0}'}" />
-      </Grid>
-    </Border>
-
-    <!-- 底部：日志（非阻塞，替代弹窗） -->
-    <Border DockPanel.Dock="Bottom" Height="200" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0">
+    <!-- 底部：事件抽屉（非阻塞，替代弹窗） -->
+    <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}"
+            BorderThickness="0,1,0,0">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,6,12,2">
-          <TextBlock Text="日志" FontWeight="SemiBold" VerticalAlignment="Center" />
-          <Button Grid.Column="1" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="12" />
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Margin="18,6,18,4">
+          <Button Classes="chip" Command="{Binding ToggleLogCommand}" Padding="6,1" Margin="0,0,8,0">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="▾" IsVisible="{Binding IsLogExpanded}" />
+              <TextBlock Text="▸" IsVisible="{Binding !IsLogExpanded}" />
+              <TextBlock Text="事件" FontWeight="SemiBold" />
+            </StackPanel>
+          </Button>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="chip" Classes.active="{Binding IsFilterAll}" Content="全部"
+                    Command="{Binding SetLogFilterCommand}" CommandParameter="{x:Static vm:LogFilter.All}" />
+            <Button Classes="chip" Classes.active="{Binding IsFilterWarning}"
+                    Command="{Binding SetLogFilterCommand}" CommandParameter="{x:Static vm:LogFilter.Warning}">
+              <TextBlock Text="{Binding WarningCount, StringFormat='警告 {0}'}" Foreground="#F59E0B" />
+            </Button>
+            <Button Classes="chip" Classes.active="{Binding IsFilterError}"
+                    Command="{Binding SetLogFilterCommand}" CommandParameter="{x:Static vm:LogFilter.Error}">
+              <TextBlock Text="{Binding ErrorCount, StringFormat='错误 {0}'}" Foreground="#EF4444" />
+            </Button>
+          </StackPanel>
+          <TextBlock Grid.Column="2" Classes="faint" Text="{Binding StatusText}" FontSize="11.5" Margin="16,0"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button Grid.Column="3" Classes="chip" Content="清空" Command="{Binding ClearLogCommand}" />
         </Grid>
-        <ListBox x:Name="LogList" ItemsSource="{Binding Logs}" Background="Transparent" Padding="12,0">
-          <ListBox.Styles>
-            <Style Selector="ListBoxItem">
-              <Setter Property="Padding" Value="8,1" />
-              <Setter Property="MinHeight" Value="0" />
-            </Style>
-          </ListBox.Styles>
+        <ListBox x:Name="LogList" Classes="log" ItemsSource="{Binding Logs}" Height="132"
+                 IsVisible="{Binding IsLogExpanded}" Margin="0,0,0,6">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="log:UiLogEntry">
-              <TextBlock Classes="log" Classes.warn="{Binding IsWarning}" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis">
-                <Run Text="{Binding Mode=OneWay, Path=TimeText}" Foreground="#9CA3AF" />
-                <Run Text="{Binding LevelText, Mode=OneWay, StringFormat=' {0,-5} '}" />
-                <Run Text="{Binding DeviceId, Mode=OneWay, StringFormat='[{0}] ', FallbackValue=''}" FontWeight="SemiBold" />
-                <Run Text="{Binding Mode=OneWay, Path=Message}" />
-              </TextBlock>
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Classes="mono faint" FontSize="11.5" Text="{Binding TimeText}" />
+                <TextBlock Classes="mono lvl" FontSize="11.5" Width="38" Text="{Binding LevelText}"
+                           Classes.warn="{Binding IsWarning}" Classes.error="{Binding IsError}" />
+                <TextBlock Classes="mono" FontSize="11.5" FontWeight="SemiBold" Width="26" Text="{Binding DeviceId}" />
+                <TextBlock FontSize="12" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
@@ -124,63 +277,81 @@
     </Border>
 
     <!-- 中间：设备卡片墙 -->
-    <ScrollViewer Padding="20,16,8,4">
-      <ItemsControl ItemsSource="{Binding Devices}">
+    <ScrollViewer Padding="17,11,17,11">
+      <ItemsControl ItemsSource="{Binding Devices}" VerticalAlignment="Top">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <WrapPanel />
+            <UniformGrid Columns="4" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:DeviceCardViewModel">
-            <Border Classes="card"
-                    Background="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}, ConverterParameter=bg}"
-                    BorderBrush="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}">
-              <StackPanel Spacing="8">
-                <Grid ColumnDefinitions="*,Auto">
-                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
-                    <TextBlock Classes="label" Text="{Binding Id}" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+            <Border Classes="card">
+              <Grid>
+                <!-- 左侧状态色条 -->
+                <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,3,3,0"
+                        Background="{Binding State, Converter={StaticResource StateBrush}}" />
+
+                <StackPanel Margin="19,14,16,12" Spacing="10">
+                  <!-- 编号 + 名称 + 状态胶囊 -->
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                    <TextBlock Classes="mono" Text="{Binding Number}" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="muted" Text="{Binding Name}" FontSize="12" Margin="10,0,0,0"
+                               VerticalAlignment="Center" />
+                    <Border Grid.Column="3" CornerRadius="99" Padding="8,3,10,3" VerticalAlignment="Center"
+                            Background="{Binding State, Converter={StaticResource StateBrush}, ConverterParameter=soft}">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="7" Height="7" VerticalAlignment="Center" Classes.pulse="{Binding IsBusy}"
+                                 Fill="{Binding State, Converter={StaticResource StateBrush}}" />
+                        <TextBlock Text="{Binding StateText}" FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="{Binding State, Converter={StaticResource StateBrush}}" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+
+                  <!-- SN / 步骤 -->
+                  <Grid ColumnDefinitions="38,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Classes="faint" Text="SN" FontSize="12.5" />
+                    <TextBlock Grid.Column="1" Classes="mono" Text="{Binding SerialNumber}" FontSize="12.5" />
+                    <TextBlock Grid.Row="1" Classes="faint" Text="步骤" FontSize="12.5" Margin="0,4,0,0" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                      <TextBlock Text="{Binding CurrentStep}" FontSize="12.5" />
+                      <TextBlock Classes="muted" Text="{Binding StepDetail}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- 分段步骤轨 -->
+                  <StackPanel Spacing="4">
+                    <ctl:StepTrack Height="6" Weights="{Binding StepWeights}" CurrentIndex="{Binding StepIndex}"
+                                   CurrentFraction="{Binding StepFraction}" IsFailed="{Binding IsFailed}"
+                                   TrackBrush="{StaticResource Surface2}"
+                                   Accent="{Binding State, Converter={StaticResource StateBrush}}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Classes="faint" Text="{Binding StepPositionText}" FontSize="11" />
+                      <TextBlock Grid.Column="1" Classes="faint mono" Text="{Binding ProgressText}" FontSize="11" />
+                    </Grid>
                   </StackPanel>
-                  <Border Grid.Column="1" CornerRadius="10" Padding="10,2"
-                          Background="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}">
-                    <TextBlock Text="{Binding StateText}" Foreground="White" FontWeight="SemiBold" FontSize="12" />
+
+                  <!-- 结果信息 -->
+                  <TextBlock Text="{Binding ResultText}" FontSize="12" MinHeight="17" MaxLines="2" TextWrapping="Wrap"
+                             TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ResultText}"
+                             Foreground="{Binding State, Converter={StaticResource StateBrush}}" />
+
+                  <!-- 用时 · 计数 · 单台操作 -->
+                  <Border BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="0,9,0,0">
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+                      <TextBlock Classes="muted mono" Text="{Binding ElapsedText}" FontSize="11.5" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Classes="mono" Text="{Binding PassCount, StringFormat='✓ {0}'}" FontSize="11.5"
+                                 Foreground="#22C55E" Margin="12,0,0,0" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Classes="mono" Text="{Binding FailCount, StringFormat='✗ {0}'}" FontSize="11.5"
+                                 Foreground="#EF4444" Margin="10,0,0,0" VerticalAlignment="Center" />
+                      <Button Grid.Column="4" Classes="icon" Content="▶" Command="{Binding StartCommand}"
+                              ToolTip.Tip="开始" Margin="0,0,6,0" />
+                      <Button Grid.Column="5" Classes="icon" Content="■" Command="{Binding StopCommand}" ToolTip.Tip="停止" />
+                    </Grid>
                   </Border>
-                </Grid>
-
-                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                  <TextBlock Classes="label" Text="SN" Width="40" />
-                  <TextBlock Grid.Column="1" Text="{Binding SerialNumber}" FontFamily="Menlo, Consolas, monospace" FontSize="13" />
-                  <TextBlock Grid.Row="1" Classes="label" Text="步骤" Width="40" Margin="0,4,0,0" />
-                  <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
-                    <TextBlock Text="{Binding CurrentStep, FallbackValue='—', TargetNullValue='—'}" FontWeight="Medium" />
-                    <TextBlock Classes="label" Text="{Binding StepDetail}" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Grid>
-
-                <Grid ColumnDefinitions="*,Auto">
-                  <ProgressBar Value="{Binding ProgressPercent}" Minimum="0" Maximum="100" Height="8" MinHeight="8"
-                               CornerRadius="4" VerticalAlignment="Center"
-                               Foreground="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}" />
-                  <TextBlock Grid.Column="1" Classes="label" Width="52" TextAlignment="Right"
-                             Text="{Binding ProgressPercent, StringFormat='{}{0:0}%'}" />
-                </Grid>
-
-                <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
-                           FontSize="12" MinHeight="32"
-                           Foreground="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}"
-                           ToolTip.Tip="{Binding ResultText}" />
-
-                <Grid ColumnDefinitions="*,Auto,Auto">
-                  <TextBlock Classes="label" VerticalAlignment="Center">
-                    <Run Text="{Binding Mode=OneWay, Path=ElapsedText}" />
-                    <Run Text="{Binding PassCount, Mode=OneWay, StringFormat='  ✓{0}'}" Foreground="#1E9E5A" />
-                    <Run Text="{Binding FailCount, Mode=OneWay, StringFormat=' ✗{0}'}" Foreground="#D64545" />
-                  </TextBlock>
-                  <Button Grid.Column="1" Content="开始" Command="{Binding StartCommand}" Padding="14,4" Margin="0,0,6,0" />
-                  <Button Grid.Column="2" Content="停止" Command="{Binding StopCommand}" Padding="14,4" />
-                </Grid>
-              </StackPanel>
+                </StackPanel>
+              </Grid>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

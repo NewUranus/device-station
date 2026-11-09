@@ -1,7 +1,19 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="DeviceStation.App.App"
-             RequestedThemeVariant="Light">
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <!-- 设计令牌（与 .superdesign/design_iterations/station_1.html 的 :root 一致） -->
+    <SolidColorBrush x:Key="Bg" Color="#0B0F14" />
+    <SolidColorBrush x:Key="Surface" Color="#121821" />
+    <SolidColorBrush x:Key="Surface2" Color="#18212C" />
+    <SolidColorBrush x:Key="Border" Color="#223041" />
+    <SolidColorBrush x:Key="Border2" Color="#2C3B4F" />
+    <SolidColorBrush x:Key="Text" Color="#E6EDF3" />
+    <SolidColorBrush x:Key="Muted" Color="#8B98A9" />
+    <SolidColorBrush x:Key="Faint" Color="#5B6879" />
+    <FontFamily x:Key="Mono">Menlo, Consolas, DejaVu Sans Mono, monospace</FontFamily>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
   </Application.Styles>
