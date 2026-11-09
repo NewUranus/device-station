@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>12</LangVersion>
+    <!-- 本机若只装了更高版本的运行时（例如 .NET 10），允许 net8.0 程序/测试前滚到该运行时上执行 -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+</Project>

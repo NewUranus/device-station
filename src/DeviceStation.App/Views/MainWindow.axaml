@@ -1,0 +1,190 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DeviceStation.App.ViewModels"
+        xmlns:log="using:DeviceStation.App.Logging"
+        xmlns:conv="using:DeviceStation.App.Converters"
+        x:Class="DeviceStation.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="DeviceStation · 多设备并行作业"
+        Width="1320" Height="880" MinWidth="720" MinHeight="560"
+        Background="#F7F8FA">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="#6B7280" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.stat">
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="0,0,12,12" />
+      <Setter Property="Width" Value="296" />
+    </Style>
+    <Style Selector="TextBlock.log">
+      <Setter Property="FontFamily" Value="Menlo, Consolas, monospace" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+    <Style Selector="TextBlock.log.warn">
+      <Setter Property="Foreground" Value="#B26B00" />
+    </Style>
+    <Style Selector="TextBlock.log.error">
+      <Setter Property="Foreground" Value="#D64545" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel>
+    <!-- 顶部：全局操作 + 统计 -->
+    <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="20,14">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock Text="DeviceStation" FontSize="20" FontWeight="Bold" />
+          <TextBlock Classes="label" Text="{Binding JobText}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="28" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel>
+            <TextBlock Classes="label" Text="运行中 / 排队" />
+            <TextBlock Classes="stat">
+              <Run Text="{Binding Mode=OneWay, Path=RunningCount}" Foreground="#2F6FED" />
+              <Run Text=" / " Foreground="#9CA3AF" />
+              <Run Text="{Binding Mode=OneWay, Path=QueuedCount}" Foreground="#6B7A99" />
+            </TextBlock>
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Classes="label" Text="通过" />
+            <TextBlock Classes="stat" Foreground="#1E9E5A" Text="{Binding PassedTotal}" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Classes="label" Text="失败" />
+            <TextBlock Classes="stat" Foreground="#D64545" Text="{Binding FailedTotal}" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Classes="label" Text="停止" />
+            <TextBlock Classes="stat" Foreground="#B26B00" Text="{Binding CancelledTotal}" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Classes="label" Text="良率" />
+            <TextBlock Classes="stat" Text="{Binding YieldText}" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="label" Text="并发上限" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding MaxConcurrency}" Minimum="1" Maximum="64" Increment="1"
+                           FormatString="0" Width="110" IsEnabled="{Binding !AnyBusy}"
+                           ToolTip.Tip="同时连接/运行的设备数，设备空闲时才能修改" />
+          </StackPanel>
+          <Button Content="全部开始" Command="{Binding StartAllCommand}" Classes="accent" Padding="18,8" />
+          <Button Content="全部停止" Command="{Binding StopAllCommand}" Padding="18,8" />
+          <Button Content="清零统计" Command="{Binding ResetStatisticsCommand}" Padding="12,8" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 底部：状态栏 -->
+    <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0" Padding="20,6">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Classes="label" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1" Classes="label" Text="{Binding DataDirectory, StringFormat='数据目录 {0}'}" />
+      </Grid>
+    </Border>
+
+    <!-- 底部：日志（非阻塞，替代弹窗） -->
+    <Border DockPanel.Dock="Bottom" Height="200" Background="White" BorderBrush="#E5E7EB" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,6,12,2">
+          <TextBlock Text="日志" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="清空" Command="{Binding ClearLogCommand}" Padding="10,2" FontSize="12" />
+        </Grid>
+        <ListBox x:Name="LogList" ItemsSource="{Binding Logs}" Background="Transparent" Padding="12,0">
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+              <Setter Property="Padding" Value="8,1" />
+              <Setter Property="MinHeight" Value="0" />
+            </Style>
+          </ListBox.Styles>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="log:UiLogEntry">
+              <TextBlock Classes="log" Classes.warn="{Binding IsWarning}" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis">
+                <Run Text="{Binding Mode=OneWay, Path=TimeText}" Foreground="#9CA3AF" />
+                <Run Text="{Binding LevelText, Mode=OneWay, StringFormat=' {0,-5} '}" />
+                <Run Text="{Binding DeviceId, Mode=OneWay, StringFormat='[{0}] ', FallbackValue=''}" FontWeight="SemiBold" />
+                <Run Text="{Binding Mode=OneWay, Path=Message}" />
+              </TextBlock>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- 中间：设备卡片墙 -->
+    <ScrollViewer Padding="20,16,8,4">
+      <ItemsControl ItemsSource="{Binding Devices}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:DeviceCardViewModel">
+            <Border Classes="card"
+                    Background="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}, ConverterParameter=bg}"
+                    BorderBrush="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Classes="label" Text="{Binding Id}" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+                  </StackPanel>
+                  <Border Grid.Column="1" CornerRadius="10" Padding="10,2"
+                          Background="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}">
+                    <TextBlock Text="{Binding StateText}" Foreground="White" FontWeight="SemiBold" FontSize="12" />
+                  </Border>
+                </Grid>
+
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                  <TextBlock Classes="label" Text="SN" Width="40" />
+                  <TextBlock Grid.Column="1" Text="{Binding SerialNumber}" FontFamily="Menlo, Consolas, monospace" FontSize="13" />
+                  <TextBlock Grid.Row="1" Classes="label" Text="步骤" Width="40" Margin="0,4,0,0" />
+                  <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding CurrentStep, FallbackValue='—', TargetNullValue='—'}" FontWeight="Medium" />
+                    <TextBlock Classes="label" Text="{Binding StepDetail}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,Auto">
+                  <ProgressBar Value="{Binding ProgressPercent}" Minimum="0" Maximum="100" Height="8" MinHeight="8"
+                               CornerRadius="4" VerticalAlignment="Center"
+                               Foreground="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}" />
+                  <TextBlock Grid.Column="1" Classes="label" Width="52" TextAlignment="Right"
+                             Text="{Binding ProgressPercent, StringFormat='{}{0:0}%'}" />
+                </Grid>
+
+                <TextBlock Text="{Binding ResultText}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                           FontSize="12" MinHeight="32"
+                           Foreground="{Binding State, Converter={x:Static conv:DeviceStateBrushConverter.Instance}}"
+                           ToolTip.Tip="{Binding ResultText}" />
+
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <TextBlock Classes="label" VerticalAlignment="Center">
+                    <Run Text="{Binding Mode=OneWay, Path=ElapsedText}" />
+                    <Run Text="{Binding PassCount, Mode=OneWay, StringFormat='  ✓{0}'}" Foreground="#1E9E5A" />
+                    <Run Text="{Binding FailCount, Mode=OneWay, StringFormat=' ✗{0}'}" Foreground="#D64545" />
+                  </TextBlock>
+                  <Button Grid.Column="1" Content="开始" Command="{Binding StartCommand}" Padding="14,4" Margin="0,0,6,0" />
+                  <Button Grid.Column="2" Content="停止" Command="{Binding StopCommand}" Padding="14,4" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
