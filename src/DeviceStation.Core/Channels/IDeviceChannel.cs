@@ -17,4 +17,10 @@ public interface IDeviceChannel : IAsyncDisposable
 
     /// <summary>读取至多 <paramref name="buffer"/> 长度的数据；返回 0 表示对端已关闭。</summary>
     Task<int> ReadAsync(Memory<byte> buffer, CancellationToken ct);
+
+    /// <summary>
+    /// 丢弃已经收到但还没被读走的数据。重试前调用：上一次尝试超时后，设备的迟到响应
+    /// 可能已经进了接收缓冲，不清掉就会被当成下一条命令的响应。
+    /// </summary>
+    void DiscardInput();
 }

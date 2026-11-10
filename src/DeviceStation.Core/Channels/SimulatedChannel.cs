@@ -115,6 +115,12 @@ public sealed class SimulatedChannel : IDeviceChannel
         return n;
     }
 
+    public void DiscardInput()
+    {
+        _pending = default;
+        while (_outbox.Reader.TryRead(out _)) { }
+    }
+
     public ValueTask DisposeAsync()
     {
         _open = false;

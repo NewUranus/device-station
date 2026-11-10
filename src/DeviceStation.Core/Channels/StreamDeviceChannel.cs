@@ -81,6 +81,12 @@ public abstract class StreamDeviceChannel : IDeviceChannel
         return n;
     }
 
+    public void DiscardInput()
+    {
+        _pending = default;
+        while (_inbox.Reader.TryRead(out _)) { }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _loopCts?.Cancel();

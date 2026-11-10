@@ -40,8 +40,15 @@ public partial class App : Application
                 .AddProvider(uiLog));
 
             var slotStore = new DeviceSlotStore(Path.Combine(options.DataDirectory, "slots"));
-            var slots = slotStore.LoadAll();
-            if (slots.Count == 0)
+            var startupLog = _loggerFactory.CreateLogger("DeviceStation.Startup");
+            int badSlotFiles = 0;
+            var slots = slotStore.LoadAll((file, ex) =>
+            {
+                badSlotFiles++;
+                startupLog.LogError("跳过无法读取的工位配置 {File}：{Error}", Path.GetFileName(file), ex.Message);
+            });
+            // 只有目录里本来就没有配置时才生成演示工位；配置全坏了不能悄悄覆盖成演示数据。
+            if (slots.Count == 0 && badSlotFiles == 0)
             {
                 slots = DemoSlots.Create(8);
                 foreach (var s in slots) slotStore.Save(s);

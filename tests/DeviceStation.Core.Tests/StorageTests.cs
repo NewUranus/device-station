@@ -40,6 +40,22 @@ public sealed class StorageTests : IDisposable
     }
 
     [Fact]
+    public void SlotStore_SkipsBrokenAndDuplicateFiles_AndKeepsTheRest()
+    {
+        var store = new DeviceSlotStore(_dir);
+        store.Save(Slot(1));
+        store.Save(Slot(2));
+        File.WriteAllText(Path.Combine(_dir, "S03.json"), "{ 这不是 JSON");
+        File.Copy(Path.Combine(_dir, "S01.json"), Path.Combine(_dir, "S99.json")); // 内容里的 Id 仍是 S01
+
+        var errors = new List<string>();
+        var loaded = store.LoadAll((file, _) => errors.Add(Path.GetFileName(file)));
+
+        Assert.Equal(["S01", "S02"], loaded.Select(s => s.Id));
+        Assert.Equal(["S03.json", "S99.json"], errors);
+    }
+
+    [Fact]
     public async Task SqliteStore_PersistsResultsFromParallelDevices()
     {
         var dbPath = Path.Combine(_dir, "results.db");

@@ -26,7 +26,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly UiLogSink _logSink;
     private readonly Dictionary<string, DeviceCardViewModel> _cardsById;
     private readonly ConcurrentDictionary<string, DeviceSnapshot> _pending = new();
-    private readonly HashSet<Guid> _countedRuns = new();
+    private readonly ConcurrentQueue<DeviceSnapshot> _finished = new();
     private readonly List<UiLogEntry> _allLogs = new();
     private readonly DispatcherTimer _timer;
 
@@ -167,7 +167,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     };
 
     // 后台线程：只记最新快照，不碰 UI。
-    private void OnSessionChanged(object? sender, DeviceSnapshot snapshot) => _pending[snapshot.Id] = snapshot;
+    // 终态快照另外排队：它可能在下一次刷新前就被同一工位新一轮的快照覆盖（例如刚结束就被“全部开始”重新拉起），
+    // 只靠 _pending 统计会漏算这一轮。每次运行只会产生一个终态快照，所以按队列计数不重不漏。
+    private void OnSessionChanged(object? sender, DeviceSnapshot snapshot)
+    {
+        if (snapshot.State.IsTerminal()) _finished.Enqueue(snapshot);
+        _pending[snapshot.Id] = snapshot;
+    }
 
     // UI 线程：每 100 ms 一次。
     private void OnTick()
@@ -176,8 +182,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (!_pending.TryRemove(id, out var snap) || !_cardsById.TryGetValue(id, out var card)) continue;
             card.Apply(snap);
-            CountIfFinished(card, snap);
         }
+
+        while (_finished.TryDequeue(out var done))
+            if (_cardsById.TryGetValue(done.Id, out var card)) CountFinished(card, done);
 
         foreach (var card in Devices)
             if (card.IsBusy) card.RefreshElapsed();
@@ -186,10 +194,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         DrainLogs();
     }
 
-    private void CountIfFinished(DeviceCardViewModel card, DeviceSnapshot snap)
+    private void CountFinished(DeviceCardViewModel card, DeviceSnapshot snap)
     {
-        // 节流会丢掉中间状态，但终态一定是该次运行的最后一个快照，所以按 RunId 计数不会漏也不会重。
-        if (!snap.State.IsTerminal() || !_countedRuns.Add(snap.RunId)) return;
         switch (snap.State)
         {
             case DeviceState.Passed: PassedTotal++; card.PassCount++; break;

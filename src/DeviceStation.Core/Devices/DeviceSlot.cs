@@ -25,13 +25,30 @@ public sealed class DeviceSlotStore(string directory)
 
     public string Directory { get; } = directory;
 
-    public IReadOnlyList<DeviceSlot> LoadAll()
+    /// <summary>
+    /// 读取全部工位。某个文件损坏或格式不对时跳过它并通过 <paramref name="onError"/> 报告，
+    /// 不影响其它工位：一个坏文件不应该让整台上位机起不来。
+    /// </summary>
+    public IReadOnlyList<DeviceSlot> LoadAll(Action<string, Exception>? onError = null)
     {
         if (!System.IO.Directory.Exists(Directory)) return [];
-        return System.IO.Directory.EnumerateFiles(Directory, "*.json")
-            .Select(Load)
-            .OrderBy(s => s.Id, StringComparer.Ordinal)
-            .ToList();
+
+        var slots = new Dictionary<string, DeviceSlot>(StringComparer.Ordinal);
+        foreach (var path in System.IO.Directory.EnumerateFiles(Directory, "*.json").Order(StringComparer.Ordinal))
+        {
+            try
+            {
+                var slot = Load(path);
+                if (!slots.TryAdd(slot.Id, slot))
+                    throw new InvalidDataException($"工位 Id 重复：{slot.Id}（已由其它文件定义）");
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException or NotSupportedException)
+            {
+                onError?.Invoke(path, ex);
+            }
+        }
+
+        return slots.Values.OrderBy(s => s.Id, StringComparer.Ordinal).ToList();
     }
 
     public void Save(DeviceSlot slot)

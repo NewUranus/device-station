@@ -35,8 +35,16 @@ public sealed class AsciiLineClient(IDeviceChannel channel)
         throw new DeviceProtocolException(name, $"无法解析的响应：{line}");
     }
 
-    /// <summary>丢弃已缓冲但未消费的数据（重试前调用，避免读到上一次的迟到响应）。</summary>
-    public void DiscardBuffered() => _rx.Clear();
+    /// <summary>
+    /// 丢弃已缓冲但未消费的数据（重试前调用，避免读到上一次的迟到响应）。
+    /// 客户端自己的行缓冲和通道里已收到的数据都要清：迟到响应往往还停在通道的接收队列里。
+    /// 清理之后才到达的响应无法靠清缓冲识别，需要协议带序号或回显命令名来对应请求。
+    /// </summary>
+    public void DiscardBuffered()
+    {
+        _rx.Clear();
+        channel.DiscardInput();
+    }
 
     private async Task<string> ReadLineAsync(CancellationToken ct)
     {
