@@ -9,6 +9,7 @@ using DeviceStation.Core.Devices;
 using DeviceStation.Core.Execution;
 using DeviceStation.Core.Jobs;
 using DeviceStation.Core.Jobs.Examples;
+using DeviceStation.Core.Logging;
 using DeviceStation.Core.Results;
 using Microsoft.Extensions.Logging;
 
@@ -17,6 +18,7 @@ namespace DeviceStation.App;
 public partial class App : Application
 {
     private ILoggerFactory? _loggerFactory;
+    private DeviceFileLoggerProvider? _fileLog;
     private DeviceManager? _manager;
     private SqliteResultStore? _results;
     private MainViewModel? _viewModel;
@@ -29,6 +31,8 @@ public partial class App : Application
         {
             var options = AppOptions.Current;
             var uiLog = new UiLogSink();
+            // 日志按设备、按天落盘：{数据目录}/logs/{DeviceId}/{yyyy-MM-dd}.log，保留 30 天。
+            _fileLog = new DeviceFileLoggerProvider(Path.Combine(options.DataDirectory, "logs"));
             _loggerFactory = LoggerFactory.Create(b => b
                 .SetMinimumLevel(LogLevel.Information)
                 .AddSimpleConsole(c =>
@@ -37,7 +41,8 @@ public partial class App : Application
                     c.SingleLine = true;
                     c.TimestampFormat = "HH:mm:ss.fff ";
                 })
-                .AddProvider(uiLog));
+                .AddProvider(uiLog)
+                .AddProvider(_fileLog));
 
             var slotStore = new DeviceSlotStore(Path.Combine(options.DataDirectory, "slots"));
             var startupLog = _loggerFactory.CreateLogger("DeviceStation.Startup");
@@ -84,6 +89,8 @@ public partial class App : Application
         _manager?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _results?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _loggerFactory?.Dispose();
+        // 通过 AddProvider 传入的实例不归 LoggerFactory 管，自己释放；放在最后，前面各组件的退出日志也能落盘。
+        _fileLog?.Dispose();
     }
 }
 
