@@ -34,15 +34,15 @@ public sealed class TraceabilityTests : IDisposable
             await fileLog.FlushAsync();
         }
 
-        var s01 = await File.ReadAllTextAsync(fileLog.PathFor("S01", Today));
+        var s01 = await ReadSharedAsync(fileLog.PathFor("S01", Today));
         Assert.Contains("WARN  run=ab12cd34 步骤 写入 第 1/4 次失败", s01);
         Assert.DoesNotContain("连接失败", s01);
 
-        var s02 = await File.ReadAllTextAsync(fileLog.PathFor("S02", Today));
+        var s02 = await ReadSharedAsync(fileLog.PathFor("S02", Today));
         Assert.Contains("ERROR run=ffff0000 连接失败", s02);
         Assert.Contains("System.IO.IOException: 端口已断开", s02); // 异常堆栈也写进去
 
-        var app = await File.ReadAllTextAsync(fileLog.PathFor(null, Today));
+        var app = await ReadSharedAsync(fileLog.PathFor(null, Today));
         Assert.Contains("DeviceStation.Startup: 启动完成", app);
     }
 
@@ -58,7 +58,7 @@ public sealed class TraceabilityTests : IDisposable
 
             foreach (var snap in snaps)
             {
-                var text = await File.ReadAllTextAsync(fileLog.PathFor(snap.Id, Today));
+                var text = await ReadSharedAsync(fileLog.PathFor(snap.Id, Today));
                 Assert.Contains($"run={snap.RunId.ToString("N")[..8]}", text); // 能和结果库 run_id 对上
                 Assert.Contains($"SN={snap.SerialNumber}", text);
             }
@@ -152,6 +152,17 @@ public sealed class TraceabilityTests : IDisposable
         Assert.Single(await store.QueryBySerialAsync("SN-GOOD"));
         Assert.False(File.Exists(store.PendingFilePath));
         Assert.Single(Directory.GetFiles(_dir, "results.db.pending.jsonl.bad-*"));
+    }
+
+    /// <summary>
+    /// 程序运行时日志文件一直被写入方打开着。Windows 上读的一方也必须允许别人继续写（FileShare.ReadWrite），
+    /// 否则会报“文件被占用”；File.ReadAllText 只允许共享读，所以这里自己打开。
+    /// </summary>
+    private static async Task<string> ReadSharedAsync(string path)
+    {
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync();
     }
 
     private static ResultRecord Record(string sn) => new(
