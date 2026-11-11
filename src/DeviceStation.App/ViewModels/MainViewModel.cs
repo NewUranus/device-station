@@ -20,6 +20,7 @@ public enum LogFilter { All, Warning, Error }
 public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private const int MaxLogLines = 400;
+    private const int MaxDeviceLogLines = 500;
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly DeviceManager _manager;
@@ -27,7 +28,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly Dictionary<string, DeviceCardViewModel> _cardsById;
     private readonly ConcurrentDictionary<string, DeviceSnapshot> _pending = new();
     private readonly ConcurrentQueue<DeviceSnapshot> _finished = new();
-    private readonly List<UiLogEntry> _allLogs = new();
+    // 全部设备共用一份日志；另外每台设备单独保留一份，切到某台设备时不会因为别的设备刷屏而看不到它较早的日志。
+    private readonly LogBuffer _allLogs = new(MaxLogLines);
+    private readonly Dictionary<string, LogBuffer> _deviceLogs = new();
     private readonly DispatcherTimer _timer;
 
     public MainViewModel(DeviceManager manager, UiLogSink logSink, IReadOnlyList<double> stepWeights, string jobText,
@@ -77,6 +80,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFilterAll), nameof(IsFilterWarning), nameof(IsFilterError))]
     private LogFilter _logFilter = LogFilter.All;
+
+    /// <summary>日志面板当前只看哪台设备；为空表示看全部设备。点击设备卡片切换。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDeviceSelected), nameof(LogScopeText))]
+    private DeviceCardViewModel? _selectedDevice;
+
+    public bool IsDeviceSelected => SelectedDevice is not null;
+
+    public string LogScopeText => SelectedDevice is { } d ? $"{d.Name} 的日志" : "全部设备";
 
     public bool IsFilterAll => LogFilter == LogFilter.All;
     public bool IsFilterWarning => LogFilter == LogFilter.Warning;
@@ -145,26 +157,74 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ToggleLog() => IsLogExpanded = !IsLogExpanded;
 
+    /// <summary>点击设备卡片：只看这台设备的日志；再点一次同一张卡片回到全部设备。</summary>
+    [RelayCommand]
+    private void SelectDevice(DeviceCardViewModel card) =>
+        SelectedDevice = ReferenceEquals(SelectedDevice, card) ? null : card;
+
+    [RelayCommand]
+    private void ShowAllDevices() => SelectedDevice = null;
+
+    partial void OnSelectedDeviceChanged(DeviceCardViewModel? oldValue, DeviceCardViewModel? newValue)
+    {
+        if (oldValue is not null) oldValue.IsSelected = false;
+        if (newValue is not null)
+        {
+            newValue.IsSelected = true;
+            newValue.HasUnreadError = false;
+            IsLogExpanded = true;
+        }
+        RebuildLogs();
+    }
+
     [RelayCommand]
     private void ClearLog()
     {
-        _allLogs.Clear();
-        Logs.Clear();
-        WarningCount = ErrorCount = 0;
+        // 选中某台设备时只清这台；否则全部清空。
+        if (SelectedDevice is { } d)
+        {
+            _deviceLogs.Remove(d.Id);
+        }
+        else
+        {
+            _allLogs.Clear();
+            _deviceLogs.Clear();
+            foreach (var card in Devices) card.HasUnreadError = false;
+        }
+        RebuildLogs();
     }
 
-    partial void OnLogFilterChanged(LogFilter value)
+    partial void OnLogFilterChanged(LogFilter value) => RebuildLogs();
+
+    /// <summary>当前范围（全部设备或选中的那台）的日志缓冲。</summary>
+    private LogBuffer? CurrentBuffer => SelectedDevice is { } d ? _deviceLogs.GetValueOrDefault(d.Id) : _allLogs;
+
+    private int CurrentMaxLines => SelectedDevice is null ? MaxLogLines : MaxDeviceLogLines;
+
+    private void RebuildLogs()
     {
         Logs.Clear();
-        foreach (var e in _allLogs.Where(Matches)) Logs.Add(e);
+        var buffer = CurrentBuffer;
+        if (buffer is not null)
+            foreach (var e in buffer.Entries.Where(MatchesLevel)) Logs.Add(e);
+        UpdateLogCounts();
     }
 
-    private bool Matches(UiLogEntry e) => LogFilter switch
+    private void UpdateLogCounts()
+    {
+        var buffer = CurrentBuffer;
+        WarningCount = buffer?.Warnings ?? 0;
+        ErrorCount = buffer?.Errors ?? 0;
+    }
+
+    private bool MatchesLevel(UiLogEntry e) => LogFilter switch
     {
         LogFilter.Warning => e.Level == LogLevel.Warning,
         LogFilter.Error => e.Level >= LogLevel.Error,
         _ => true,
     };
+
+    private bool InScope(UiLogEntry e) => SelectedDevice is not { } d || e.DeviceId == d.Id;
 
     // 后台线程：只记最新快照，不碰 UI。
     // 终态快照另外排队：它可能在下一次刷新前就被同一工位新一轮的快照覆盖（例如刚结束就被“全部开始”重新拉起），
@@ -221,22 +281,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         while (n++ < 200 && _logSink.TryDequeue(out var entry))
         {
             _allLogs.Add(entry);
-            if (entry.IsWarning) WarningCount++;
-            if (entry.IsError)
+            if (entry.DeviceId is { } id)
             {
-                ErrorCount++;
-                StatusText = $"[{entry.DeviceId}] {entry.Message}";
+                if (!_deviceLogs.TryGetValue(id, out var deviceLog))
+                    _deviceLogs[id] = deviceLog = new LogBuffer(MaxDeviceLogLines);
+                deviceLog.Add(entry);
+
+                // 没在看这台设备时出了错误，卡片上亮红点提醒。
+                if (entry.IsError && SelectedDevice?.Id != id &&
+                    _cardsById.TryGetValue(id, out var card))
+                    card.HasUnreadError = true;
             }
-            if (Matches(entry)) Logs.Add(entry);
+
+            if (entry.IsError) StatusText = $"[{entry.DeviceId}] {entry.Message}";
+            if (InScope(entry) && MatchesLevel(entry)) Logs.Add(entry);
         }
 
-        if (_allLogs.Count > MaxLogLines) _allLogs.RemoveRange(0, _allLogs.Count - MaxLogLines);
-        while (Logs.Count > MaxLogLines) Logs.RemoveAt(0);
+        if (n > 1) UpdateLogCounts();
+        int max = CurrentMaxLines;
+        while (Logs.Count > max) Logs.RemoveAt(0);
     }
 
     public void Dispose()
     {
         _timer.Stop();
         _manager.SessionChanged -= OnSessionChanged;
+    }
+}
+
+/// <summary>一份有上限的日志：超出时丢最旧的；警告/错误计数是累计值，不随丢弃减少。</summary>
+internal sealed class LogBuffer(int capacity)
+{
+    private readonly Queue<UiLogEntry> _entries = new();
+
+    public IEnumerable<UiLogEntry> Entries => _entries;
+
+    public int Warnings { get; private set; }
+
+    public int Errors { get; private set; }
+
+    public void Add(UiLogEntry entry)
+    {
+        _entries.Enqueue(entry);
+        while (_entries.Count > capacity) _entries.Dequeue();
+        if (entry.IsWarning) Warnings++;
+        if (entry.IsError) Errors++;
+    }
+
+    public void Clear()
+    {
+        _entries.Clear();
+        Warnings = Errors = 0;
     }
 }

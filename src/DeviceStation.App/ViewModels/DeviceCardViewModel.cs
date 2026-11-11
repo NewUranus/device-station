@@ -49,6 +49,12 @@ public sealed partial class DeviceCardViewModel : ObservableObject
     [ObservableProperty] private int _passCount;
     [ObservableProperty] private int _failCount;
 
+    /// <summary>日志面板当前正在看这台设备。</summary>
+    [ObservableProperty] private bool _isSelected;
+
+    /// <summary>这台设备有还没看过的错误日志（选中它时清除）。</summary>
+    [ObservableProperty] private bool _hasUnreadError;
+
     public bool IsBusy => State.IsBusy();
 
     public bool IsFailed => State == DeviceState.Failed;

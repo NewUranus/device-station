@@ -13,6 +13,7 @@
 - **通道**：串口、TCP、模拟设备，全部可取消
 - **记录**：日志带 DeviceId 作用域；结果按 SN 写入 SQLite（后台批量写，不阻塞设备）
 - **界面**：Avalonia 卡片墙，分段步骤轨显示每台走到哪一步；100 ms 节流刷新，无阻塞弹窗
+- **按设备看日志**：点击设备卡片，日志面板只显示这台设备（每台单独保留最近 500 行，不会被别的设备刷掉），可再叠加级别筛选；没在看的设备出错时卡片亮红点
 
 ## 运行
 
@@ -38,7 +39,8 @@ src/DeviceStation.Core     纯类库，不依赖 UI
   Execution/  DeviceManager：StartAll / StopAll / Start(id) / Stop(id)
   Results/    SqliteResultStore
 src/DeviceStation.App      Avalonia 11 + CommunityToolkit.Mvvm
-tests/                     xUnit，基于模拟设备
+tests/DeviceStation.Core.Tests   xUnit，基于模拟设备
+tests/DeviceStation.App.Tests    Avalonia Headless，在真实窗口里模拟点击
 .superdesign/              界面设计稿（3 个方向，采用 station_1）
 ```
 
